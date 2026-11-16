@@ -1,6 +1,7 @@
 # %%
 from pathlib import Path
 
+import dalex as dx
 import lightgbm as lgb
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,6 +29,7 @@ TWEEDIE_POWER = 1.5
 RANDOM_STATE = 42
 N_SPLITS = 5
 LEARNING_CURVE_TREES = 200
+PDP_SAMPLE_SIZE = 1000
 FIGURES_DIR = Path(__file__).parent.parent / "figures"
 
 # %%
@@ -677,5 +679,85 @@ for sample, df_sample, y_sample, w_sample in [
             }
         ).round(4)
     )
+
+# %%
+# PS4 Ex 4: partial dependence plots of the constrained and the unconstrained
+# LGBM.
+# Step 1: one explainer per model, on the test features and outcomes.
+constrained_explainer = dx.Explainer(
+    cv_constrained.best_estimator_,
+    X_test_t,
+    y_test_t,
+    label="LGBM constrained",
+    verbose=False,
+)
+unconstrained_explainer = dx.Explainer(
+    cv.best_estimator_, X_test_t, y_test_t, label="LGBM unconstrained", verbose=False
+)
+
+# Step 2: partial dependence profiles for all features. dalex computes
+# numerical and categorical features in separate calls. The profiles average
+# over PDP_SAMPLE_SIZE test policies. The seed is the same for both models, so
+# they are evaluated on the same policies.
+pdp_results = []
+for variable_type in ["numerical", "categorical"]:
+    profiles = [
+        explainer.model_profile(
+            type="partial",
+            variable_type=variable_type,
+            N=PDP_SAMPLE_SIZE,
+            random_state=RANDOM_STATE,
+            verbose=False,
+        )
+        for explainer in [constrained_explainer, unconstrained_explainer]
+    ]
+    pdp_results += [profile.result for profile in profiles]
+    # Interactive dalex plot with both models in one figure. A fixed div_id
+    # keeps the file the same from run to run.
+    profiles[0].plot(profiles[1], show=False).write_html(
+        FIGURES_DIR / "ps4_ex4_pdp_{}.html".format(variable_type),
+        include_plotlyjs="cdn",
+        div_id="ps4_ex4_pdp_{}".format(variable_type),
+    )
+pdp = pd.concat(pdp_results)
+
+for label, profile in pdp[pdp["_vname_"] == "BonusMalus"].groupby("_label_"):
+    steps = profile["_yhat_"].diff()
+    print(
+        "BonusMalus PDP of {}: from {:.1f} to {:.1f}, falls at {} of {} grid steps, "
+        "largest fall {:.1f} at BonusMalus {:.1f}".format(
+            label,
+            profile["_yhat_"].iloc[0],
+            profile["_yhat_"].iloc[-1],
+            (steps < 0).sum(),
+            len(steps) - 1,
+            abs(steps.min()),
+            profile["_x_"].iloc[steps.argmin()],
+        )
+    )
+
+# Static version of the same profiles, so that the figure shows on GitHub.
+# Each panel has its own vertical axis: BonusMalus moves the prediction far
+# more than the other features, and a shared axis would hide their profiles.
+fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+for ax, feature in zip(axes.flat, ["BonusMalus", "Density"] + categoricals):
+    for label, profile in pdp[pdp["_vname_"] == feature].groupby("_label_"):
+        if feature in categoricals:
+            # Categories have no natural spacing, so they are drawn as points.
+            profile = profile.sort_values("_x_")
+            ax.plot(profile["_x_"].astype(str), profile["_yhat_"], "o", label=label)
+        else:
+            ax.plot(profile["_x_"], profile["_yhat_"], label=label)
+    ax.set(xlabel=feature)
+    ax.tick_params(axis="x", labelrotation=90 if feature == "Region" else 0)
+for ax in axes[:, 0]:
+    ax.set(ylabel="Average predicted pure premium (EUR)")
+axes[0, 0].legend()
+fig.suptitle(
+    "Partial dependence: the unconstrained LGBM dips in BonusMalus, "
+    "the constrained LGBM does not"
+)
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "ps4_ex4_pdp.png", dpi=150, bbox_inches="tight")
 
 # %%
