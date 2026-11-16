@@ -57,7 +57,7 @@ conventions. `__init__` only stores `lower_quantile` and `upper_quantile`.
 The tests cover the three given quantile pairs with a seeded random generator,
 calling `transform` before `fit`, invalid quantiles, 2D and DataFrame input,
 and that new data is clipped at the bounds learned in `fit` and not at its own
-quantiles.
+quantiles. One test runs the Winsorizer as a step of a scikit-learn `Pipeline`.
 
 ### Ex 3: Improve the model
 
@@ -67,7 +67,7 @@ quantiles.
 | GLM with splines | 73.31 | 73.72 | 1.007 | 0.242 |
 | LGBM, default settings | 65.10 | 74.04 | not computed | not computed |
 | LGBM, tuned | 69.83 | 73.41 | 0.912 | 0.251 |
-| LGBM frequency x severity | 71.19 | 72.61 | 0.972 | 0.271 |
+| LGBM frequency x severity | 71.53 | 72.64 | 0.985 | 0.270 |
 
 **Why do we divide the claim amount by exposure?**
 
@@ -118,7 +118,7 @@ and the categorical columns directly. With default settings (learning rate 0.1,
 100 trees) it overfits, as shown above.
 
 We tuned `learning_rate` over 0.01, 0.02, 0.05 and 0.1 and `n_estimators` over
-50, 100 and 200 with 5-fold cross-validation on the training set. The folds are
+25, 50, 100, 200 and 400 with 5-fold cross-validation on the training set. The folds are
 shuffled with a fixed seed because the rows are ordered by policy ID. The score
 is the exposure-weighted Tweedie deviance on the validation fold. The default
 score of `GridSearchCV` is the unweighted R², which is not the loss we report.
@@ -126,7 +126,10 @@ In an earlier run, an unweighted deviance score selected a learning rate of
 0.02 with 50 trees, and that model had a test deviance of 74.07.
 
 The search selects a learning rate of 0.05 with 50 trees (cross-validated
-deviance 73.82). Refitted on the training set, this model has a training
+deviance 73.82). A first grid with 50, 100 and 200 trees selected the same
+setting, but 50 was then the smallest value in the grid. In the wider grid the
+optimum is in the interior: at a learning rate of 0.05, both 25 trees (74.17)
+and 100 trees (74.00) score worse. Refitted on the training set, this model has a training
 deviance of 69.83 and a test deviance of 73.41. The gap between the two falls
 from 8.94 to 3.58, and the test deviance is 0.30 below the GLM benchmark.
 
@@ -149,12 +152,20 @@ with a Gamma objective, weighted by the number of claims, using only the
 folds as above, scored with their own weighted deviance. The predicted pure
 premium is the product of the two predictions.
 
-The frequency search selects a learning rate of 0.05 with 200 trees, the
-largest number in the grid, so a wider grid might do better. The severity
-search selects the smallest setting (0.01 with 50 trees), which suggests that
-these features explain little of the variation in claim size.
+The frequency search selects a learning rate of 0.05 with 200 trees. The score
+is flat around this point: 400 trees at the same learning rate, or at 0.02,
+give the same Poisson deviance to four decimals (0.4488).
 
-The combined model has a training deviance of 71.19 and a test deviance of
-72.61, the lowest of the four models, and the highest Gini index (0.271). Its
-predicted test claims are 2.8% below the observed total. This result is from
-one train/test split, so the ranking of the models could change on other data.
+The severity search selects the smallest setting in the grid, a learning rate
+of 0.01 with 25 trees. Its Gamma deviance rises with every increase in either
+parameter, from 1.323 to 1.571 at the largest setting. Each extra boosting
+step makes the validation fit worse, which suggests that these features
+explain very little of the variation in claim size. The optimum is still on
+the border of the grid, so an even smaller setting might score slightly
+better.
+
+The combined model has a training deviance of 71.53 and a test deviance of
+72.64, the lowest test deviance in the table, and the highest Gini index
+(0.270). Its predicted test claims are 1.5% below the observed total. This
+result is from one train/test split, so the ranking of the models could change
+on other data.
