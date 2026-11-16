@@ -21,6 +21,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, SplineTransformer, StandardScaler
 
 from ps3.data import create_sample_split, load_transform
+from ps3.evaluation import evaluate_predictions
 
 TRAINING_FRAC = 0.8
 TWEEDIE_POWER = 1.5
@@ -652,5 +653,29 @@ ax.legend()
 ax.figure.savefig(
     FIGURES_DIR / "ps4_ex2_learning_curve.png", dpi=150, bbox_inches="tight"
 )
+
+# %%
+# PS4 Ex 3: compare the constrained and the unconstrained LGBM with
+# evaluate_predictions. The GLM benchmark is included as a reference.
+prediction_columns = {
+    "GLM benchmark": "pp_t_glm1",
+    "LGBM unconstrained": "pp_t_lgbm",
+    "LGBM constrained": "pp_t_lgbm_constrained",
+}
+for sample, df_sample, y_sample, w_sample in [
+    ("train", df_train, y_train_t, w_train_t),
+    ("test", df_test, y_test_t, w_test_t),
+]:
+    print("metrics on the {} set:".format(sample))
+    print(
+        pd.DataFrame(
+            {
+                label: evaluate_predictions(df_sample[column], y_sample, w_sample)[
+                    "value"
+                ]
+                for label, column in prediction_columns.items()
+            }
+        ).round(4)
+    )
 
 # %%

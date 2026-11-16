@@ -258,3 +258,71 @@ custom `eval_metric`, so it is on the same scale as the other numbers.
 LightGBM's own `tweedie` metric is a negative log-likelihood on a different
 scale. I pass `eval_set` as the sheet says. LightGBM 4.7.0 marks it as
 deprecated in favour of `eval_X` and `eval_y` and prints a warning.
+
+### Ex 3: Metrics function
+
+`evaluate_predictions` is in `ps3/evaluation/_evaluate_predictions.py`. It
+takes the predictions, the actuals and a sample weight, and returns a
+DataFrame with the metric names as index. The sample weight enters every
+metric:
+
+- `bias`: weighted mean prediction minus weighted mean actual, divided by the
+  weighted mean actual. With exposure as weight this is predicted total claims
+  over observed total claims, minus one.
+- `deviance`: weighted mean Tweedie deviance. The power is an argument with
+  default 1.5.
+- `mae` and `rmse`: weighted mean absolute error and the root of the weighted
+  mean squared error.
+- `gini`: one minus twice the area under the Lorenz curve, computed as at the
+  bottom of `ps3_script.py`.
+
+The sheet does not say whether the bias is absolute or relative. I chose the
+relative version because it can be read without knowing the level of the pure
+premium. The tests use small examples worked out by hand, check that perfect
+predictions give zero bias, deviance, MAE and RMSE, that rescaling the weights
+changes nothing, and that the deviance agrees with scikit-learn's
+`mean_tweedie_deviance`.
+
+**How do the constrained and the unconstrained LGBM compare?**
+
+On the test set the unconstrained LGBM is better on deviance, MAE, RMSE and
+Gini. The constrained LGBM is better only on bias. I added the GLM benchmark
+as a reference.
+
+Test set:
+
+| Metric | GLM benchmark | LGBM unconstrained | LGBM constrained |
+|---|---|---|---|
+| bias | 0.011 | -0.088 | -0.079 |
+| deviance | 73.71 | 73.41 | 73.80 |
+| mae | 257.3 | 245.2 | 246.8 |
+| rmse | 3298.1 | 3297.3 | 3297.4 |
+| gini | 0.246 | 0.251 | 0.234 |
+
+Training set:
+
+| Metric | GLM benchmark | LGBM unconstrained | LGBM constrained |
+|---|---|---|---|
+| bias | 0.012 | -0.091 | -0.083 |
+| deviance | 73.75 | 69.83 | 70.69 |
+| mae | 259.0 | 246.2 | 247.7 |
+| rmse | 4076.8 | 4073.9 | 4074.3 |
+| gini | 0.267 | 0.402 | 0.371 |
+
+The deviance and Gini values equal the ones printed earlier in the script, so
+the function reproduces the existing calculations.
+
+Both LGBMs predict too little in total, 8.8% and 7.9% on the test set, and the
+bias is about the same on the training set. The GLM is 1.1% too high. The
+constraint lowers the Gini index on the test set from 0.251 to 0.234, which is
+below the GLM (0.246), so the constrained LGBM ranks policies worse than the
+benchmark on this split. Both LGBMs rank much better on the training set than
+on the test set (0.402 and 0.371 against 0.251 and 0.234), while the GLM
+changes little (0.267 against 0.246).
+
+MAE and RMSE say little here. The RMSE differs by less than 1 between the
+three models on a level of about 3,298, because a few large claims dominate
+it. The MAE favours low predictions: only 19,964 of the 542,757 training
+policies have a claim, so for most policies the absolute error is the
+prediction itself. The lower MAE of the two LGBMs goes together with their
+negative bias and should not be read as a better fit.
