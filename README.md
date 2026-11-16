@@ -222,4 +222,4 @@ rises by 0.38, which puts the constrained LGBM 0.08 above the GLM benchmark
 (73.71). The gap between training and test deviance falls from 3.58 to 3.10.
 On this split the constraint costs a little accuracy and does not improve the
 fit. What it buys is the guarantee that the prediction never falls when
-BonusMalus rises.
+BonusMalus rises and the other features stay the same.
