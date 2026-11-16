@@ -23,3 +23,9 @@ dependencies:
   - glum
   - lightgbm
   - scikit-learn
+  # interpretation
+  - plotly
+  - nbformat  # plotly needs it to show figures in the interactive window
+  - pip:
+      # conda-forge only has dalex 1.7.0, whose plots fail with numpy 2
+      - dalex>=1.7.1
