@@ -260,9 +260,21 @@ def weighted_deviance_scorer(distribution, weights):
     return scorer
 
 
+def cv_table(cv, values="mean_test_score"):
+    """Arrange grid search results as learning rate by number of trees."""
+    table = pd.DataFrame(cv.cv_results_).pivot(
+        index="param_estimate__learning_rate",
+        columns="param_estimate__n_estimators",
+        values=values,
+    )
+    return table.round(4)
+
+
+# A first grid with 50, 100 and 200 trees had the optimum of all three searches
+# below on its border, so it now runs from 25 to 400 trees.
 param_grid = {
     "estimate__learning_rate": [0.01, 0.02, 0.05, 0.1],
-    "estimate__n_estimators": [50, 100, 200],
+    "estimate__n_estimators": [25, 50, 100, 200, 400],
 }
 # The rows are ordered by policy ID, so shuffle before forming the folds.
 kfold = KFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
@@ -275,13 +287,9 @@ cv = GridSearchCV(
 cv.fit(X_train_t, y_train_t, estimate__sample_weight=w_train_t)
 
 print("best parameters t_lgbm: {}".format(cv.best_params_))
-print(
-    pd.DataFrame(cv.cv_results_).pivot(
-        index="param_estimate__learning_rate",
-        columns="param_estimate__n_estimators",
-        values="mean_test_score",
-    )
-)
+print(cv_table(cv))
+print("standard deviation across folds:")
+print(cv_table(cv, values="std_test_score"))
 
 df_test["pp_t_lgbm"] = cv.best_estimator_.predict(X_test_t)
 df_train["pp_t_lgbm"] = cv.best_estimator_.predict(X_train_t)
@@ -330,6 +338,7 @@ cv_freq = GridSearchCV(
 )
 cv_freq.fit(X_train_t, df_train["Frequency"], estimate__sample_weight=w_train_t)
 print("best parameters lgbm frequency: {}".format(cv_freq.best_params_))
+print(cv_table(cv_freq))
 
 # Severity: average amount per claim, Gamma objective, weighted by the number
 # of claims. The Gamma distribution has no mass at zero, so only policies with
@@ -355,6 +364,7 @@ cv_sev.fit(
     estimate__sample_weight=df_train.loc[has_claim, "ClaimNb"].values,
 )
 print("best parameters lgbm severity: {}".format(cv_sev.best_params_))
+print(cv_table(cv_sev))
 
 df_test["pp_fs_lgbm"] = cv_freq.best_estimator_.predict(
     X_test_t
@@ -417,6 +427,7 @@ for label, y_pred in [
     )
     gini = 1 - 2 * auc(ordered_samples, cum_claims)
     label += f" (Gini index: {gini: .3f})"
+    print(label)
     ax.plot(ordered_samples, cum_claims, linestyle="-", label=label)
 
 # Oracle model: y_pred == y_test
