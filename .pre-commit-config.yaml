@@ -6,6 +6,8 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        # The script rewrites these files on every run without a final newline.
+        exclude: ^figures/.*\.html$
       - id: check-yaml
       - id: check-added-large-files
   # black and isort read their settings from pyproject.toml (88 characters).
