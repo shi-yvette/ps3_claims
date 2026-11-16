@@ -223,3 +223,38 @@ rises by 0.38, which puts the constrained LGBM 0.08 above the GLM benchmark
 On this split the constraint costs a little accuracy and does not improve the
 fit. What it buys is the guarantee that the prediction never falls when
 BonusMalus rises and the other features stay the same.
+
+### Ex 2: Learning curve
+
+![Learning curve of the constrained LGBM](figures/ps4_ex2_learning_curve.png)
+
+**What do you notice, is the estimator tuned optimally?**
+
+The number of trees is close to its best value for a learning rate of 0.05,
+but I would not call the estimator optimally tuned, because only these two
+parameters were searched.
+
+The training deviance falls with every tree: 70.69 after the selected 50 trees
+and 65.81 after 200. The test deviance falls quickly at first, is almost flat
+from about 40 trees, and reaches its lowest value of 73.74 after 58 trees.
+After that it rises slowly, to 74.21 after 200 trees. From there on the model
+only fits the training data better, which is overfitting. The selected 50
+trees give a test deviance of 73.80, which is 0.05 above the lowest point of
+the curve, so the cross-validation picked a sensible place to stop.
+
+Two things limit this conclusion. The test curve is one sample, and moving
+`n_estimators` to 58 because of it would be tuning on the test set. The other
+tree settings, such as `num_leaves` and `min_child_samples`, are still at
+their defaults, and the gap of 3.10 between training and test deviance at 50
+trees suggests that simpler trees could be worth trying. I did not test this
+(not investigated).
+
+Differences from the sheet. The sheet refits the best estimator as it is. I
+refit it with 200 trees and marked the selected 50, because a curve that stops
+at 50 cannot show what happens after it. The first 50 trees are the same as in
+the selected model: the curve gives 70.69 and 73.80 at 50 trees, the same as
+in Ex 1. The curve shows the exposure-weighted mean Tweedie deviance through a
+custom `eval_metric`, so it is on the same scale as the other numbers.
+LightGBM's own `tweedie` metric is a negative log-likelihood on a different
+scale. I pass `eval_set` as the sheet says. LightGBM 4.7.0 marks it as
+deprecated in favour of `eval_X` and `eval_y` and prints a warning.
