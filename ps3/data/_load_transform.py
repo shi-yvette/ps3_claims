@@ -1,9 +1,43 @@
+from pathlib import Path
+from urllib.request import urlretrieve
+
 import numpy as np
 import pandas as pd
 
+# Raw files are kept in the "data" folder at the root of the repository
+# (ignored by git), so the 36 MB download only happens on the first run.
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
+FREQ_URL = "https://www.openml.org/data/get_csv/20649148/freMTPL2freq.arff"
+SEV_URL = "https://www.openml.org/data/get_csv/20649149/freMTPL2sev.arff"
 
-def load_transform():
+
+def _download_once(url: str, filename: str) -> Path:
+    """Download a file into the data folder unless it is already there.
+
+    Parameters
+    ----------
+    url : str
+        Address of the file.
+    filename : str
+        Name under which the file is stored in the data folder.
+
+    Returns
+    -------
+    Path
+        Location of the local copy.
+    """
+    path = DATA_DIR / filename
+    if not path.exists():
+        DATA_DIR.mkdir(exist_ok=True)
+        urlretrieve(url, path)
+    return path
+
+
+def load_transform() -> pd.DataFrame:
     """Load and transform data from OpenML.
+
+    The two raw files are downloaded on the first call and read from the local
+    data folder afterwards.
 
     Source:
     https://glum.readthedocs.io/en/latest/tutorials/glm_french_motor_tutorial/glm_french_motor.html#
@@ -26,22 +60,24 @@ def load_transform():
     5. We fix ``'ClaimNb'`` as the claim number with claim amount greater zero.
     6. ``'VehPower'``, ``'VehAge'``, and ``'DrivAge'`` are clipped and/or digitized
        into bins so they can be used as categoricals later on.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per policy, with the claim counts, exposure, claim amounts and
+        the policy features.
     """
     # load the datasets
     # first row (=column names) uses "", all other rows use ''
     # use '' as quotechar as it is easier to change column names
-    df = pd.read_csv(
-        "https://www.openml.org/data/get_csv/20649148/freMTPL2freq.arff", quotechar="'"
-    )
+    df = pd.read_csv(_download_once(FREQ_URL, "freMTPL2freq.csv"), quotechar="'")
 
     # rename column names '"name"' => 'name'
     df = df.rename(lambda x: x.replace('"', ""), axis="columns")
     df["IDpol"] = df["IDpol"].astype(np.int64)
     df.set_index("IDpol", inplace=True)
 
-    df_sev = pd.read_csv(
-        "https://www.openml.org/data/get_csv/20649149/freMTPL2sev.arff", index_col=0
-    )
+    df_sev = pd.read_csv(_download_once(SEV_URL, "freMTPL2sev.csv"), index_col=0)
 
     # join ClaimAmount from df_sev to df:
     #   1. cut ClaimAmount at 100_000
