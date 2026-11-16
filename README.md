@@ -32,14 +32,14 @@ Tweedie deviance (power 1.5) weighted by exposure, as printed by the script.
 ### Ex 1: Fixed train/test split
 
 The function is `create_sample_split` in `ps3/data/_sample_split.py`. The
-problem set calls it `create_sample_column`; we kept the name the repository
-already imports. We also corrected the docstring, which gave 0.9 as the default
+problem set calls it `create_sample_column`; I kept the name the repository
+already imports. I also corrected the docstring, which gave 0.9 as the default
 `training_frac` while the signature uses 0.8.
 
 Each ID is converted to text, hashed with `hashlib.md5`, and reduced modulo 100
 to a bucket. Buckets below `training_frac * 100` are "train" and the rest
-"test". We chose the hash over a plain `IDpol % 100` so that the split does not
-depend on any pattern in how IDs were assigned. We did not use Python's
+"test". I chose the hash over a plain `IDpol % 100` so that the split does not
+depend on any pattern in how IDs were assigned. I did not use Python's
 built-in `hash()`, because it is salted per session for strings and would give
 a different split on every run. The function accepts one column or a list of
 columns and returns a copy of the data.
@@ -70,7 +70,7 @@ quantiles. One test runs the Winsorizer as a step of a scikit-learn `Pipeline`.
 | LGBM, tuned | 69.83 | 73.41 | 0.912 | 0.251 |
 | LGBM frequency x severity | 71.53 | 72.64 | 0.985 | 0.270 |
 
-**Why do we divide the claim amount by exposure?**
+**Why is the claim amount divided by exposure?**
 
 Policies are observed for different lengths of time. Exposure runs from 0.003
 to 1 year, with a median of 0.49. A policy observed for one month has had less
@@ -84,11 +84,11 @@ short period is noisier, so it should count less. With these weights the
 weighted mean of the pure premium equals total claims divided by total
 exposure.
 
-**How does the deviance change when we add splines?**
+**How does the deviance change with splines?**
 
 The script adds splines to `BonusMalus` and `Density`. The problem set names
 `BonusMalus` and `VehPower`, but the script already treats `VehPower` as a
-categorical with one coefficient per level, so we followed the script. Each of
+categorical with one coefficient per level, so I followed the script. Each of
 the two features is standardised and expanded into 6 cubic spline columns
 (5 knots at quantiles, `include_bias=False`), which replace its single linear
 term. The GLM is otherwise the same as the benchmark.
@@ -98,7 +98,7 @@ it moves from 73.71 to 73.72, and the Gini index falls from 0.246 to 0.242.
 The splines fit the training data better, but the gain does not carry over to
 the test set. On this split they are not an improvement over the linear terms.
 
-**How could we check whether we are overfitting?**
+**How can overfitting be checked?**
 
 Compare the deviance on the training set with the deviance on data the model
 has not seen. For the benchmark the two are almost equal (73.75 and 73.71).
@@ -109,7 +109,7 @@ overfitting.
 
 A single test set can be lucky or unlucky, and reusing it to choose models
 would overfit to it. The better check is k-fold cross-validation on the
-training set, which we use below to tune the LGBM. The same approach could
+training set, which I use below to tune the LGBM. The same approach could
 choose the number of spline knots.
 
 **LGBM and tuning**
@@ -118,11 +118,11 @@ The LGBM uses the Tweedie objective with power 1.5, the same loss as the GLMs,
 and the categorical columns directly. With default settings (learning rate 0.1,
 100 trees) it overfits, as shown above.
 
-We tuned `learning_rate` over 0.01, 0.02, 0.05 and 0.1 and `n_estimators` over
+I tuned `learning_rate` over 0.01, 0.02, 0.05 and 0.1 and `n_estimators` over
 25, 50, 100, 200 and 400 with 5-fold cross-validation on the training set. The folds are
 shuffled with a fixed seed because the rows are ordered by policy ID. The score
 is the exposure-weighted Tweedie deviance on the validation fold. The default
-score of `GridSearchCV` is the unweighted R², which is not the loss we report.
+score of `GridSearchCV` is the unweighted R^2, which is not the loss I report.
 In an earlier run, an unweighted deviance score selected a learning rate of
 0.02 with 50 trees, and that model had a test deviance of 74.07.
 
@@ -141,7 +141,7 @@ separate these settings clearly. Second, the tuned LGBM underpredicts the
 level of claims: it predicts 8.92 million on the test set against 9.78 million
 observed, 8.8% too low, while both GLMs are within 1.1%. It ranks policies
 slightly better than the GLMs (Gini 0.251 against 0.246) but would need
-recalibration before its predictions could be used as prices. We have not
+recalibration before its predictions could be used as prices. I have not
 investigated the cause of this bias.
 
 **Optional: LGBM frequency and severity models**
@@ -182,7 +182,7 @@ addition to the versions named there. Figures are saved in `figures/`.
 
 ![Average claims per BonusMalus value](figures/ps4_ex1_claims_by_bonus_malus.png)
 
-**What could happen if we do not include a monotonicity constraint?**
+**What could happen without a monotonicity constraint?**
 
 The model could predict a lower premium for a customer whose BonusMalus score
 is worse.
