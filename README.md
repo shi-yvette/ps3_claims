@@ -21,8 +21,9 @@ python analyses/ps3_script.py
 
 `load_transform` downloads the two raw files from OpenML on the first run and
 stores them in `data/`, which git ignores. Later runs read the local copies.
+The script takes about five minutes and writes its figures to `figures/`.
 
-## Answers
+## Problem set 3
 
 All numbers come from one run of `analyses/ps3_script.py` with Python 3.12,
 glum 3.4.1, LightGBM 4.7.0 and scikit-learn 1.9.1. "Deviance" is the mean
@@ -174,7 +175,8 @@ on other data.
 
 The code for problem set 4 is at the end of `analyses/ps3_script.py`, after the
 comment "Problem set 4 starts here". The numbers come from the same run as the
-answers above. Figures are saved in `figures/`.
+answers above, with numpy 2.3.5, pandas 2.3.3, dalex 1.8.0 and plotly 7.1.0 in
+addition to the versions named there. Figures are saved in `figures/`.
 
 ### Ex 1: Monotonicity constraint
 
