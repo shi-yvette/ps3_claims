@@ -169,3 +169,57 @@ The combined model has a training deviance of 71.53 and a test deviance of
 (0.270). Its predicted test claims are 1.5% below the observed total. This
 result is from one train/test split, so the ranking of the models could change
 on other data.
+
+## Problem set 4
+
+The code for problem set 4 is at the end of `analyses/ps3_script.py`, after the
+comment "Problem set 4 starts here". The numbers come from the same run as the
+answers above. Figures are saved in `figures/`.
+
+### Ex 1: Monotonicity constraint
+
+![Average claims per BonusMalus value](figures/ps4_ex1_claims_by_bonus_malus.png)
+
+**What could happen if we do not include a monotonicity constraint?**
+
+The model could predict a lower premium for a customer whose BonusMalus score
+is worse.
+
+The plot shows the average claim amount per policy-year for each of the 113
+BonusMalus values in the training set. I used total claims divided by total
+exposure in each group, which is the exposure-weighted mean of the pure
+premium. The average rises with BonusMalus overall, but it falls at 56 of the
+112 steps from one value to the next. The data are thin: 62.8% of the exposure
+is at BonusMalus 50 and only 1.0% is above 100, so most of the averages are
+noisy.
+
+An LGBM without a constraint splits on BonusMalus wherever that lowers the
+training loss, also inside branches defined by other features. It can
+therefore pick up some of these dips. A customer whose score gets worse would
+then pay less, which contradicts what the score is meant to do. Ex 4 checks
+whether the unconstrained model here does this.
+
+**How does the constrained LGBM compare with the unconstrained one?**
+
+The constrained model is slightly worse on cross-validated, training and test
+deviance.
+
+| LGBM | Selected setting | CV deviance (fold std) | Train deviance | Test deviance | Predicted / observed claims (test) |
+|---|---|---|---|---|---|
+| Unconstrained | 0.05, 50 trees | 73.82 (2.91) | 69.83 | 73.41 | 0.912 |
+| Constrained | 0.05, 50 trees | 73.98 (2.87) | 70.69 | 73.80 | 0.921 |
+
+`constrained_lgbm` is the same pipeline as the unconstrained LGBM with
+`monotone_constraints` added: 1 for `BonusMalus` and 0 for the other eight
+features, built from the column names of the training data. I kept the grid,
+the folds and the scorer, so the constraint is the only difference. Both
+searches select a learning rate of 0.05 with 50 trees.
+
+The cross-validated deviance rises by 0.17. That is small next to the standard
+deviation across folds of about 2.9, but the two searches use the same folds
+and I did not compare them fold by fold (not investigated). The test deviance
+rises by 0.38, which puts the constrained LGBM 0.08 above the GLM benchmark
+(73.71). The gap between training and test deviance falls from 3.58 to 3.10.
+On this split the constraint costs a little accuracy and does not improve the
+fit. What it buys is the guarantee that the prediction never falls when
+BonusMalus rises.
