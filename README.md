@@ -196,8 +196,9 @@ noisy.
 An LGBM without a constraint splits on BonusMalus wherever that lowers the
 training loss, also inside branches defined by other features. It can
 therefore pick up some of these dips. A customer whose score gets worse would
-then pay less, which contradicts what the score is meant to do. Ex 4 checks
-whether the unconstrained model here does this.
+then pay less, which contradicts what the score is meant to do. The partial
+dependence plot in Ex 4 shows that the unconstrained model here does this
+around BonusMalus 62.
 
 **How does the constrained LGBM compare with the unconstrained one?**
 
@@ -326,3 +327,45 @@ it. The MAE favours low predictions: only 19,964 of the 542,757 training
 policies have a claim, so for most policies the absolute error is the
 prediction itself. The lower MAE of the two LGBMs goes together with their
 negative bias and should not be read as a better fit.
+
+### Ex 4: Partial dependence plots
+
+![Partial dependence profiles of both LGBMs](figures/ps4_ex4_pdp.png)
+
+**How do the PDPs of the constrained and the unconstrained LGBM compare?**
+
+They differ where the constraint applies. The unconstrained profile for
+`BonusMalus` goes down in places and the constrained one never does. For the
+other eight features the two models give similar profiles.
+
+Both `BonusMalus` profiles start at an average prediction of 89 at a score of
+50 and rise to more than 500 at the top of the grid (555 unconstrained, 509
+constrained). The unconstrained profile falls at 6 of the 100 steps of the
+grid. The largest fall is 82.5, at a score of about 63, right after a spike
+near 62. This is the case described in Ex 1: with the other features held
+fixed, a customer with a score of 63 gets a lower prediction than one with 62.
+The constrained profile falls at none of the 100 steps and replaces the spike
+with a flat step.
+
+The other panels each have their own vertical axis. Their profiles stay
+between about 100 and 180, so `BonusMalus` moves the prediction far more than
+any other feature. In these panels the two models are within a few euros of
+each other and order the categories in nearly the same way. The largest
+visible gaps are of the order of 5 to 10 (for example `VehBrand` B12 and
+`DrivAge` group 6). I read these from the plot and did not compute them.
+
+Limits of the plot. The profiles are unweighted averages over 1,000 policies
+sampled from the test set, the same policies for both models. The `BonusMalus`
+grid ends at 198, the highest score in that sample. Few policies have a score
+above 100 (1.0% of the training exposure), so the upper part of both curves
+rests on little data. A PDP also sets `BonusMalus` to every grid value for
+every policy, including values that such a policy would rarely have.
+
+Differences from the sheet. The sheet suggests downgrading numpy below 2 if
+the `ptp` error appears. It did appear, in the plot method of dalex 1.7.0, the
+newest version on conda-forge. I installed dalex 1.8.0 from PyPI instead,
+which works with numpy 2.3.5, so the other packages and the earlier numbers
+stay as they were. The figure above is drawn with matplotlib from the profiles
+that dalex computes, so that it shows on GitHub. The interactive dalex plots
+are saved as `figures/ps4_ex4_pdp_numerical.html` and
+`figures/ps4_ex4_pdp_categorical.html` and can be opened in a browser.
