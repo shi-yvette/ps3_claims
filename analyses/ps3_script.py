@@ -1,4 +1,6 @@
 # %%
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -22,6 +24,7 @@ TRAINING_FRAC = 0.8
 TWEEDIE_POWER = 1.5
 RANDOM_STATE = 42
 N_SPLITS = 5
+FIGURES_DIR = Path(__file__).parent.parent / "figures"
 
 # %%
 # load data
@@ -447,5 +450,116 @@ ax.set(
 )
 ax.legend(loc="upper left")
 plt.plot()
+
+# %%
+# ----------------------------------------------------------------------------
+# Problem set 4 starts here.
+# ----------------------------------------------------------------------------
+FIGURES_DIR.mkdir(exist_ok=True)
+
+# %%
+# PS4 Ex 1: monotonicity constraint for BonusMalus.
+# Step 1: average claims per BonusMalus value, weighted by exposure. Total
+# claims divided by total exposure in a group is the exposure-weighted mean of
+# the pure premium. I use the training set only, so that the test set plays no
+# part in the decision to constrain the model.
+bonus_malus = df_train.groupby("BonusMalus")[["ClaimAmountCut", "Exposure"]].sum()
+bonus_malus["PurePremium"] = bonus_malus["ClaimAmountCut"] / bonus_malus["Exposure"]
+exposure_share = bonus_malus["Exposure"] / bonus_malus["Exposure"].sum()
+
+print("BonusMalus values in the training set: {}".format(len(bonus_malus)))
+print("share of exposure at BonusMalus 50: {:.3f}".format(exposure_share.loc[50]))
+print(
+    "share of exposure above BonusMalus 100: {:.3f}".format(
+        exposure_share[bonus_malus.index > 100].sum()
+    )
+)
+print(
+    "steps to the next BonusMalus value where the average falls: {} of {}".format(
+        (bonus_malus["PurePremium"].diff() < 0).sum(), len(bonus_malus) - 1
+    )
+)
+
+fig, (ax_claims, ax_exposure) = plt.subplots(
+    2, 1, sharex=True, figsize=(8, 7), height_ratios=[2, 1]
+)
+ax_claims.plot(
+    bonus_malus.index, bonus_malus["PurePremium"], marker="o", markersize=3, lw=0.8
+)
+ax_claims.set(
+    title="Average claims rise with BonusMalus, but not at every step",
+    ylabel="Average claim amount per policy-year (EUR)",
+)
+ax_exposure.bar(bonus_malus.index, bonus_malus["Exposure"])
+ax_exposure.set_yscale("log")
+ax_exposure.set(xlabel="BonusMalus", ylabel="Exposure (policy-years, log scale)")
+fig.savefig(
+    FIGURES_DIR / "ps4_ex1_claims_by_bonus_malus.png", dpi=150, bbox_inches="tight"
+)
+
+# %%
+# Step 2: constrained LGBM. LightGBM wants one entry per feature in column
+# order: 1 forces the prediction to be non-decreasing in that feature, 0 leaves
+# it free. Everything else is the same as in the unconstrained pipeline.
+monotone_constraints = [int(column == "BonusMalus") for column in X_train_t.columns]
+print("monotone constraints: {}".format(dict(zip(X_train_t, monotone_constraints))))
+
+constrained_lgbm = Pipeline(
+    [
+        (
+            "estimate",
+            LGBMRegressor(
+                objective="tweedie",
+                tweedie_variance_power=TWEEDIE_POWER,
+                monotone_constraints=monotone_constraints,
+                random_state=RANDOM_STATE,
+                verbose=-1,
+            ),
+        )
+    ]
+)
+
+# Step 3: same grid, folds and scorer as the unconstrained search, so the
+# constraint is the only difference between the two.
+cv_constrained = GridSearchCV(
+    constrained_lgbm,
+    param_grid=param_grid,
+    scoring=weighted_deviance_scorer(TweedieDist, df_train["Exposure"]),
+    cv=kfold,
+)
+cv_constrained.fit(X_train_t, y_train_t, estimate__sample_weight=w_train_t)
+
+print("best parameters t_lgbm_constrained: {}".format(cv_constrained.best_params_))
+print(cv_table(cv_constrained))
+print("standard deviation across folds:")
+print(cv_table(cv_constrained, values="std_test_score"))
+
+df_test["pp_t_lgbm_constrained"] = cv_constrained.best_estimator_.predict(X_test_t)
+df_train["pp_t_lgbm_constrained"] = cv_constrained.best_estimator_.predict(X_train_t)
+
+print(
+    "training loss t_lgbm_constrained:  {}".format(
+        TweedieDist.deviance(
+            y_train_t, df_train["pp_t_lgbm_constrained"], sample_weight=w_train_t
+        )
+        / np.sum(w_train_t)
+    )
+)
+
+print(
+    "testing loss t_lgbm_constrained:  {}".format(
+        TweedieDist.deviance(
+            y_test_t, df_test["pp_t_lgbm_constrained"], sample_weight=w_test_t
+        )
+        / np.sum(w_test_t)
+    )
+)
+
+print(
+    "Total claim amount on test set, observed = {}, predicted = {}".format(
+        df["ClaimAmountCut"].values[test].sum(),
+        np.sum(df["Exposure"].values[test] * df_test["pp_t_lgbm_constrained"]),
+    )
+)
 
 # %%
