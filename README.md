@@ -369,3 +369,58 @@ stay as they were. The figure above is drawn with matplotlib from the profiles
 that dalex computes, so that it shows on GitHub. The interactive dalex plots
 are saved as `figures/ps4_ex4_pdp_numerical.html` and
 `figures/ps4_ex4_pdp_categorical.html` and can be opened in a browser.
+
+### Ex 5: Shapley
+
+![Shapley values for the first test policy](figures/ps4_ex5_shap.png)
+
+**Where do the decompositions of the constrained LGBM and the GLM differ?**
+
+For the first policy of the test set the two models agree on the sign of all
+nine contributions and on the largest ones. They differ in how much they give
+to `VehBrand`, `VehAge`, `Area` and `Density`.
+
+The policy has BonusMalus 50, region R82, area D, density 1,217, vehicle brand
+B12, regular fuel, and groups 5, 0 and 5 for driver age, vehicle age and
+vehicle power. The LGBM predicts 105.19 and the GLM 100.81. The contributions
+add up to the difference between this prediction and the average prediction
+of the model, which is 137.70 for the LGBM and 147.45 for the GLM.
+
+| Feature | LGBM constrained | GLM benchmark |
+|---|---|---|
+| BonusMalus = 50 | -49.79 | -56.49 |
+| Region = R82 | 15.08 | 14.41 |
+| VehPower = 5 | -10.94 | -13.55 |
+| DrivAge = 5 | 10.34 | 9.55 |
+| VehGas = Regular | -7.27 | -10.59 |
+| Density = 1217 | 6.14 | 0.60 |
+| Area = D | 4.58 | 13.28 |
+| VehBrand = B12 | -2.23 | -12.84 |
+| VehAge = 0 | 1.59 | 9.00 |
+
+In both models the BonusMalus score of 50, the lowest in the data, is by far
+the largest contribution and pulls the prediction down by 50 to 56. `Region`,
+`VehPower`, `DrivAge` and `VehGas` are within 3.4 of each other across the two
+models.
+
+The GLM gives `VehBrand` B12 a contribution of -12.84 and the lowest vehicle
+age group one of 9.00, against -2.23 and 1.59 in the LGBM. The GLM has one
+coefficient for each category, which applies to every policy in it, while the
+LGBM only splits on a category where that lowers the loss. I did not check
+whether this is the reason for the difference (not investigated).
+
+`Area` and `Density` should be read together, because `Area` is a banded
+version of `Density`. The GLM puts almost all of the effect on `Area` (13.28
+against 0.60 for `Density`), the LGBM splits it between the two (4.58 and
+6.14). The sums are closer: 13.88 and 10.72.
+
+The two baselines also differ by 9.75. The LGBM predicts less on average than
+the GLM, which matches its negative bias in Ex 3.
+
+Limits. This is one policy and the pattern may be different for others. dalex
+computes the values on the scale of the prediction, in euros, for both models,
+and not on the linear predictor of the GLM. They are averages over 25 random
+orderings of the features with 1,000 sampled test policies as background, so
+they would change a little with another seed. I did not check how much (not
+investigated). The interactive dalex plot is saved as
+`figures/ps4_ex5_shap.html`.

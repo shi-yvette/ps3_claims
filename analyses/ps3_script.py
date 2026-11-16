@@ -29,7 +29,8 @@ TWEEDIE_POWER = 1.5
 RANDOM_STATE = 42
 N_SPLITS = 5
 LEARNING_CURVE_TREES = 200
-PDP_SAMPLE_SIZE = 1000
+EXPLAINER_SAMPLE_SIZE = 1000
+SHAP_ORDERINGS = 25
 FIGURES_DIR = Path(__file__).parent.parent / "figures"
 
 # %%
@@ -697,15 +698,15 @@ unconstrained_explainer = dx.Explainer(
 
 # Step 2: partial dependence profiles for all features. dalex computes
 # numerical and categorical features in separate calls. The profiles average
-# over PDP_SAMPLE_SIZE test policies. The seed is the same for both models, so
-# they are evaluated on the same policies.
+# over EXPLAINER_SAMPLE_SIZE test policies. The seed is the same for both
+# models, so they are evaluated on the same policies.
 pdp_results = []
 for variable_type in ["numerical", "categorical"]:
     profiles = [
         explainer.model_profile(
             type="partial",
             variable_type=variable_type,
-            N=PDP_SAMPLE_SIZE,
+            N=EXPLAINER_SAMPLE_SIZE,
             random_state=RANDOM_STATE,
             verbose=False,
         )
@@ -759,5 +760,68 @@ fig.suptitle(
 )
 fig.tight_layout()
 fig.savefig(FIGURES_DIR / "ps4_ex4_pdp.png", dpi=150, bbox_inches="tight")
+
+# %%
+# PS4 Ex 5: Shapley decomposition of one prediction, for the constrained LGBM
+# and the initial GLM.
+# Step 1: the explainer for the constrained LGBM exists already, so only the
+# GLM needs one.
+glm_explainer = dx.Explainer(
+    t_glm1, X_test_t, y_test_t, label="GLM benchmark", verbose=False
+)
+
+# Step 2: decompose the prediction for the first policy of the test set. dalex
+# averages the contributions over SHAP_ORDERINGS random orderings of the
+# features and takes the average prediction from EXPLAINER_SAMPLE_SIZE test
+# policies. Both models get the same seed.
+observation = X_test_t.iloc[[0]]
+shap = [
+    explainer.predict_parts(
+        observation,
+        type="shap",
+        B=SHAP_ORDERINGS,
+        N=EXPLAINER_SAMPLE_SIZE,
+        random_state=RANDOM_STATE,
+    )
+    for explainer in [constrained_explainer, glm_explainer]
+]
+
+for explainer, decomposition in zip([constrained_explainer, glm_explainer], shap):
+    print(
+        "{}: prediction = {:.2f}, average prediction = {:.2f}".format(
+            explainer.label, decomposition.prediction, decomposition.intercept
+        )
+    )
+
+# Rows with B == 0 hold the average over the orderings.
+contributions = pd.DataFrame(
+    {
+        explainer.label: decomposition.result[decomposition.result["B"] == 0].set_index(
+            "variable"
+        )["contribution"]
+        for explainer, decomposition in zip(
+            [constrained_explainer, glm_explainer], shap
+        )
+    }
+)
+contributions = contributions.loc[
+    contributions["LGBM constrained"].abs().sort_values().index
+]
+print(contributions.round(2))
+
+# Step 3: plot both decompositions. Interactive dalex plot first, then a
+# static chart with the two models side by side for each feature.
+shap[0].plot(shap[1], show=False).write_html(
+    FIGURES_DIR / "ps4_ex5_shap.html", include_plotlyjs="cdn", div_id="ps4_ex5_shap"
+)
+
+ax = contributions.plot.barh(figsize=(8, 6))
+ax.axvline(0, color="black", linewidth=0.8)
+ax.set(
+    title="First test policy: same signs in both models, different sizes",
+    xlabel="Contribution to the predicted pure premium (EUR)",
+    ylabel="",
+)
+ax.figure.savefig(FIGURES_DIR / "ps4_ex5_shap.png", dpi=150, bbox_inches="tight")
 
 # %%
