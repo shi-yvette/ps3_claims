@@ -77,10 +77,10 @@ print(
 )
 # %%
 # TODO: Let's add splines for BonusMalus and Density and use a Pipeline.
-# Steps: 
-# 1. Define a Pipeline which chains a StandardScaler and SplineTransformer. 
-#    Choose knots="quantile" for the SplineTransformer and make sure, we 
-#    are only including one intercept in the final GLM. 
+# Steps:
+# 1. Define a Pipeline which chains a StandardScaler and SplineTransformer.
+#    Choose knots="quantile" for the SplineTransformer and make sure, we
+#    are only including one intercept in the final GLM.
 # 2. Put the transforms together into a ColumnTransformer. Here we use OneHotEncoder for the categoricals.
 # 3. Chain the transforms together with the GLM in a Pipeline.
 
@@ -165,14 +165,12 @@ print(
 # TODO: Let's tune the LGBM to reduce overfitting.
 # Steps:
 # 1. Define a `GridSearchCV` object with our lgbm pipeline/estimator. Tip: Parameters for a specific step of the pipeline
-# can be passed by <step_name>__param. 
+# can be passed by <step_name>__param.
 
 # Note: Typically we tune many more parameters and larger grids,
 # but to save compute time here, we focus on getting the learning rate
 # and the number of estimators somewhat aligned -> tune learning_rate and n_estimators
-cv = GridSearchCV(
-
-)
+cv = GridSearchCV()
 cv.fit(X_train_t, y_train_t, estimate__sample_weight=w_train_t)
 
 df_test["pp_t_lgbm"] = cv.best_estimator_.predict(X_test_t)
@@ -202,7 +200,8 @@ print(
 # Let's compare the sorting of the pure premium predictions
 
 
-# Source: https://scikit-learn.org/stable/auto_examples/linear_model/plot_tweedie_regression_insurance_claims.html
+# Source:
+# https://scikit-learn.org/stable/auto_examples/linear_model/plot_tweedie_regression_insurance_claims.html
 def lorenz_curve(y_true, y_pred, exposure):
     y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     exposure = np.asarray(exposure)

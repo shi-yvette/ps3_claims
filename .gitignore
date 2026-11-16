@@ -15,7 +15,7 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Raw data downloaded from OpenML by load_transform
-data/
+/data/
 
 # Editor settings
 .vscode/

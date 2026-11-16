@@ -5,7 +5,8 @@ import pandas as pd
 def load_transform():
     """Load and transform data from OpenML.
 
-    Source: https://glum.readthedocs.io/en/latest/tutorials/glm_french_motor_tutorial/glm_french_motor.html#
+    Source:
+    https://glum.readthedocs.io/en/latest/tutorials/glm_french_motor_tutorial/glm_french_motor.html#
 
     Summary of transformations:
 
