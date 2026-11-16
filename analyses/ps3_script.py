@@ -1,6 +1,7 @@
 # %%
 from pathlib import Path
 
+import lightgbm as lgb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from glum import (
     TweedieDistribution,
 )
 from lightgbm import LGBMRegressor
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import auc
 from sklearn.model_selection import GridSearchCV, KFold
@@ -24,6 +26,7 @@ TRAINING_FRAC = 0.8
 TWEEDIE_POWER = 1.5
 RANDOM_STATE = 42
 N_SPLITS = 5
+LEARNING_CURVE_TREES = 200
 FIGURES_DIR = Path(__file__).parent.parent / "figures"
 
 # %%
@@ -560,6 +563,94 @@ print(
         df["ClaimAmountCut"].values[test].sum(),
         np.sum(df["Exposure"].values[test] * df_test["pp_t_lgbm_constrained"]),
     )
+)
+
+# %%
+# PS4 Ex 2: learning curve of the constrained LGBM.
+
+
+def tweedie_deviance_metric(y_true, y_pred, weight):
+    """Evaluate the exposure-weighted mean Tweedie deviance during training.
+
+    LightGBM's own "tweedie" metric is a negative log-likelihood on another
+    scale. With this metric the learning curve shows the same loss as the
+    training and testing losses printed above.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        Observed pure premium.
+    y_pred : np.ndarray
+        Predicted pure premium.
+    weight : np.ndarray
+        Exposure of each policy.
+
+    Returns
+    -------
+    tuple
+        Name of the metric, its value, and False because lower is better.
+    """
+    deviance = TweedieDist.deviance(y_true, y_pred, sample_weight=weight)
+    return "tweedie_deviance", deviance / np.sum(weight), False
+
+
+# Step 1: refit the best constrained estimator with the train and test sets as
+# eval_set. I let it run to LEARNING_CURVE_TREES instead of stopping at the
+# selected number, because the curve can only show whether that number is a
+# good choice if it continues past it. Boosting adds one tree at a time, so the
+# first trees are the same as in the selected model.
+selected_trees = cv_constrained.best_params_["estimate__n_estimators"]
+learning_curve_lgbm = clone(cv_constrained.best_estimator_).set_params(
+    estimate__n_estimators=LEARNING_CURVE_TREES
+)
+learning_curve_lgbm.fit(
+    X_train_t,
+    y_train_t,
+    estimate__sample_weight=w_train_t,
+    estimate__eval_set=[(X_train_t, y_train_t), (X_test_t, y_test_t)],
+    estimate__eval_names=["train", "test"],
+    estimate__eval_sample_weight=[w_train_t, w_test_t],
+    estimate__eval_metric=tweedie_deviance_metric,
+)
+
+evals_result = learning_curve_lgbm[-1].evals_result_
+train_curve = np.array(evals_result["train"]["tweedie_deviance"])
+test_curve = np.array(evals_result["test"]["tweedie_deviance"])
+print(
+    "deviance after the selected {} trees: train = {}, test = {}".format(
+        selected_trees, train_curve[selected_trees - 1], test_curve[selected_trees - 1]
+    )
+)
+print(
+    "lowest test deviance: {} after {} trees".format(
+        test_curve.min(), test_curve.argmin() + 1
+    )
+)
+print(
+    "deviance after {} trees: train = {}, test = {}".format(
+        LEARNING_CURVE_TREES, train_curve[-1], test_curve[-1]
+    )
+)
+
+# Step 2: plot the learning curve. plot_metric counts iterations from 0, so
+# the selected number of trees is drawn one to the left.
+ax = lgb.plot_metric(
+    learning_curve_lgbm[-1],
+    metric="tweedie_deviance",
+    title="Test deviance is flat around the selected number of trees, then rises",
+    xlabel="Boosting iteration",
+    ylabel="Mean Tweedie deviance (power 1.5, exposure-weighted)",
+    figsize=(8, 5),
+)
+ax.axvline(
+    selected_trees - 1,
+    color="gray",
+    linestyle="--",
+    label="selected n_estimators = {}".format(selected_trees),
+)
+ax.legend()
+ax.figure.savefig(
+    FIGURES_DIR / "ps4_ex2_learning_curve.png", dpi=150, bbox_inches="tight"
 )
 
 # %%
