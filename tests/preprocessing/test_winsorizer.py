@@ -3,18 +3,27 @@ import pandas as pd
 import pytest
 from sklearn.base import clone
 from sklearn.exceptions import NotFittedError
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from ps3.preprocessing import Winsorizer
 
 SEED = 42
 
 
+@pytest.fixture
+def X() -> np.ndarray:
+    """Standard normal sample drawn with a fixed seed."""
+    rng = np.random.default_rng(SEED)
+    return rng.normal(0, 1, 1000)
+
+
 @pytest.mark.parametrize(
     "lower_quantile, upper_quantile", [(0, 1), (0.05, 0.95), (0.5, 0.5)]
 )
-def test_winsorizer(lower_quantile: float, upper_quantile: float) -> None:
-    rng = np.random.default_rng(SEED)
-    X = rng.normal(0, 1, 1000)
+def test_winsorizer(
+    X: np.ndarray, lower_quantile: float, upper_quantile: float
+) -> None:
     expected_lower = np.quantile(X, lower_quantile)
     expected_upper = np.quantile(X, upper_quantile)
 
@@ -73,9 +82,7 @@ def test_dataframe_input_keeps_columns_and_index() -> None:
     )
 
 
-def test_transform_does_not_modify_input() -> None:
-    rng = np.random.default_rng(SEED)
-    X = rng.normal(0, 1, 1000)
+def test_transform_does_not_modify_input(X: np.ndarray) -> None:
     original = X.copy()
 
     Winsorizer(lower_quantile=0.05, upper_quantile=0.95).fit_transform(X)
@@ -97,6 +104,25 @@ def test_invalid_quantiles_raise(lower_quantile: float, upper_quantile: float) -
 
     with pytest.raises(ValueError, match="Quantiles must satisfy"):
         winsorizer.fit(np.array([1.0, 2.0, 3.0]))
+
+
+def test_works_as_a_pipeline_step() -> None:
+    """In a Pipeline, the test data is clipped at the training bounds."""
+    X_train = np.arange(101, dtype=float).reshape(-1, 1)
+    X_test = np.array([[-50.0], [50.0], [500.0]])
+    pipeline = Pipeline(
+        [
+            ("winsorize", Winsorizer(lower_quantile=0.1, upper_quantile=0.9)),
+            ("scale", StandardScaler()),
+        ]
+    )
+
+    pipeline.fit(X_train)
+    Xt = pipeline.transform(X_test)
+
+    scaler = pipeline["scale"]
+    expected = (np.array([[10.0], [50.0], [90.0]]) - scaler.mean_) / scaler.scale_
+    np.testing.assert_allclose(Xt, expected)
 
 
 def test_follows_sklearn_parameter_conventions() -> None:
