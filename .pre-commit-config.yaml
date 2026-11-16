@@ -23,9 +23,12 @@ repos:
     hooks:
       - id: flake8
   # mypy runs in its own environment, so it needs the stubs listed here.
-  # Its options are set in pyproject.toml.
+  # Its options are set in pyproject.toml. It checks the package and the tests
+  # only: the analysis script indexes with np.where tuples, which pandas-stubs
+  # rejects although the code runs correctly.
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.4.1
     hooks:
       - id: mypy
         additional_dependencies: [numpy, pandas-stubs]
+        files: ^(ps3|tests)/
